@@ -10,77 +10,87 @@ import CoreData
 
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
-
+    @State private var activeSession: WorkoutSession?
+    @State private var showingNewSession = false
+    
     @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
-    private var items: FetchedResults<Item>
-
+        sortDescriptors: [NSSortDescriptor(keyPath: \WorkoutSession.startDate, ascending: false)],
+        predicate: NSPredicate(format: "endDate == nil"),
+        animation: .default
+    )
+    private var activeSessions: FetchedResults<WorkoutSession>
+    
     var body: some View {
-        NavigationView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-                    } label: {
-                        Text(item.timestamp!, formatter: itemFormatter)
+        TabView {
+            // Active Session Tab
+            VStack {
+                if activeSessions.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "dumbbell.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.blue)
+                        Text("No Active Session")
+                            .font(.headline)
+                        Text("Start a new workout session to begin")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        Button(action: startNewSession) {
+                            Label("Start Workout", systemImage: "play.circle.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                        }
+                        .padding()
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                } else if let session = activeSessions.first, activeSession == nil {
+                    WorkoutSessionView(session: session)
+                        .onDisappear {
+                            activeSession = nil
+                        }
+                } else if let session = activeSession {
+                    WorkoutSessionView(session: session)
+                        .onDisappear {
+                            activeSession = nil
+                        }
+                } else {
+                    Text("Loading...")
                 }
-                .onDelete(perform: deleteItems)
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
+            .tabItem {
+                Label("Active", systemImage: "play.circle.fill")
             }
-            Text("Select an item")
+            
+            // Session History Tab
+            SessionHistoryView()
+                .tabItem {
+                    Label("History", systemImage: "calendar")
+                }
         }
     }
-
-    private func addItem() {
+    
+    private func startNewSession() {
         withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-
+            let newSession = WorkoutSession(context: viewContext)
+            newSession.startDate = Date()
+            
             do {
                 try viewContext.save()
+                activeSession = newSession
             } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
                 let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+                print("Error creating session: \(nsError), \(nsError.userInfo)")
             }
         }
     }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
-
 #Preview {
-    ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    let controller = PersistenceController.preview
+    ContentView()
+        .environment(\.managedObjectContext, controller.container.viewContext)
 }
