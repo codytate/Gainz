@@ -82,8 +82,8 @@ struct WorkoutSessionView: View {
     }
     
     private var sortedWorkouts: [Workout] {
-        let workouts = session.workouts as? [Workout] ?? []
-        return workouts.sorted { ($0.order) < ($1.order) }
+        let workoutsArray = (session.workouts as? NSSet)?.allObjects as? [Workout] ?? []
+        return workoutsArray.sorted { $0.order < $1.order }
     }
     
     private func addWorkout() {

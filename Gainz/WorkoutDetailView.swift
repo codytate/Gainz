@@ -29,10 +29,10 @@ struct WorkoutDetailView: View {
             
             // List of sets
             List {
-                ForEach(sortedSets, id: \.self) { set in
+                ForEach(Array(sortedSets.enumerated()), id: \.element) { index, set in
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Set \(sortedSets.firstIndex(of: set) ?? 0 + 1)")
+                            Text("Set \(index + 1)")
                                 .font(.headline)
                             Text("\(set.reps) reps × \(String(format: "%.1f", set.weight)) lbs")
                                 .font(.caption)
@@ -73,8 +73,8 @@ struct WorkoutDetailView: View {
     }
     
     private var sortedSets: [Set] {
-        let sets = workout.sets as? [Set] ?? []
-        return sets.sorted { ($0.order) < ($1.order) }
+        let setsArray = (workout.sets as? NSSet)?.allObjects as? [Set] ?? []
+        return setsArray.sorted { $0.order < $1.order }
     }
     
     private func addSet() {
