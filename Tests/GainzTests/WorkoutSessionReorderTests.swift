@@ -246,28 +246,13 @@ final class WorkoutSessionReorderTests: XCTestCase {
     
     // MARK: - Helper Methods (Replicating View Logic for Testing)
     
-    private func moveWorkout(from source: Workout, to destination: Workout) {
-        let sourceOrder = source.order
-        let destOrder = destination.order
+    private func moveWorkouts(from source: IndexSet, to destination: Int) {
+        var workouts = sortedWorkouts()
+        workouts.move(fromOffsets: source, toOffset: destination)
         
-        guard sourceOrder != destOrder else { return }
-        
-        if sourceOrder < destOrder {
-            // Moving down
-            for workout in sortedWorkouts() {
-                if workout.order > sourceOrder && workout.order <= destOrder {
-                    workout.order -= 1
-                }
-            }
-            source.order = destOrder
-        } else {
-            // Moving up
-            for workout in sortedWorkouts() {
-                if workout.order >= destOrder && workout.order < sourceOrder {
-                    workout.order += 1
-                }
-            }
-            source.order = destOrder
+        // Update order for all workouts
+        for (index, workout) in workouts.enumerated() {
+            workout.order = Int32(index)
         }
     }
     

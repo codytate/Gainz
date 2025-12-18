@@ -4,12 +4,31 @@
     //
     //  Created by Cody Tate on 12/17/25.
     //
+    //  DESCRIPTION:
+    //  This view displays an active workout session, allowing users to:
+    //  - View and manage exercises (workouts) within the session
+    //  - Add, reorder (via drag-and-drop), and delete exercises
+    //  - Add and delete sets for each exercise
+    //  - Navigate to detailed workout views
+    //  - End the current session
+    //
+    //  INTERACTIONS:
+    //  - WorkoutSession (Core Data entity): The main data model for the session
+    //  - Workout (Core Data entity): Individual exercises within a session
+    //  - Set (Core Data entity): Sets within each workout/exercise
+    //  - WorkoutDetailView: Navigation destination for detailed workout editing
+    //  - Persistence.swift: Core Data stack for saving/loading data
+    //  - ContentView.swift: Parent view that presents this view for active sessions
+    //
 
     import SwiftUI
     import CoreData
 
-    // MARK: - Main View
-    struct WorkoutSessionView: View {
+// MARK: - Main View
+/// The primary view for managing an active workout session.
+/// Displays a list of exercises that can be reordered via drag-and-drop,
+/// with support for adding/deleting exercises and sets.
+struct WorkoutSessionView: View {
         @Environment(\.managedObjectContext) private var viewContext
         @Environment(\.dismiss) var dismiss
         
@@ -24,84 +43,81 @@
         var body: some View {
             NavigationView {
                 VStack(spacing: 0) {
-                    // Session header with elapsed time
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("Workout Session")
-                                .font(.headline)
-                            Text(session.startDate ?? Date(), style: .time)
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                        Spacer()
-                        Button(action: endSession) {
-                            Label("End", systemImage: "stop.circle.fill")
-                                .foregroundColor(.red)
-                        }
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    
-                    // Use a scroll + cards so each exercise is visually separated
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(sortedWorkouts) { workout in
-                                ExerciseCardView(
-                                    workout: workout,
-                                    activeAddSetWorkoutID: $activeAddSetWorkoutID,
-                                    newSetReps: $newSetReps,
-                                    newSetWeight: $newSetWeight,
-                                    onAddSet: { addSet(to: workout) },
-                                    onDeleteSet: deleteSet,
-                                    onDeleteWorkout: { deleteWorkout(workout) }
-                            )
-                            .draggable(workout.objectID.uriRepresentation().absoluteString) {
-                                ExerciseCardDragPreview(workoutName: workout.name ?? "Unnamed")
-                                    .onAppear {
-                                        triggerHapticFeedback()
-                                    }
-                            }
-                            .dropDestination(for: String.self) { items, location in
-                                guard let droppedURIString = items.first,
-                                      let droppedURI = URL(string: droppedURIString),
-                                      let droppedObjectID = viewContext.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: droppedURI),
-                                      let droppedWorkout = try? viewContext.existingObject(with: droppedObjectID) as? Workout else {
-                                    return false
-                                }
-                                
-                                if droppedWorkout.objectID != workout.objectID {
-                                    moveWorkout(from: droppedWorkout, to: workout)
-                                }
-                                return true
-                            } isTargeted: { isTargeted in
-                                // Visual feedback handled by card styling
-                            }
-                        }
-                    }
-                    .padding(.vertical)
+                    sessionHeader
+                    workoutList
+                    addWorkoutButton
                 }
-                
-                // Add workout button
-                Button(action: { showingAddWorkout = true }) {
-                    Label("Add Workout", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+                .navigationTitle("Active Session")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        EditButton()
+                    }
                 }
+            }
+            .alert("Add Workout", isPresented: $showingAddWorkout) {
+                TextField("Workout name (e.g., Bench Press)", text: $newWorkoutName)
+                Button("Cancel", role: .cancel) { }
+                Button("Add") {
+                    addWorkout()
+                }
+            }
+        }
+        
+        // MARK: - View Components
+        
+        private var sessionHeader: some View {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Workout Session")
+                        .font(.headline)
+                    Text(session.startDate ?? Date(), style: .time)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                Spacer()
+                Button(action: endSession) {
+                    Label("End", systemImage: "stop.circle.fill")
+                        .foregroundColor(.red)
+                }
+            }
+            .padding()
+            .background(Color(.systemGray6))
+        }
+        
+        private var workoutList: some View {
+            List {
+                ForEach(sortedWorkouts) { workout in
+                    ExerciseCardView(
+                        workout: workout,
+                        activeAddSetWorkoutID: $activeAddSetWorkoutID,
+                        newSetReps: $newSetReps,
+                        newSetWeight: $newSetWeight,
+                        onAddSet: { addSet(to: workout) },
+                        onDeleteSet: deleteSet,
+                        onDeleteWorkout: { deleteWorkout(workout) }
+                    )
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+                }
+                .onMove(perform: moveWorkouts)
+                .onDelete(perform: deleteWorkouts)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+        }
+        
+private var addWorkoutButton: some View {
+        Button(action: { showingAddWorkout = true }) {
+            Label("Add Workout", systemImage: "plus.circle.fill")
+                .frame(maxWidth: .infinity)
                 .padding()
-            }
-            .navigationTitle("Active Session")
-            .navigationBarTitleDisplayMode(.inline)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
         }
-        .alert("Add Workout", isPresented: $showingAddWorkout) {
-            TextField("Workout name (e.g., Bench Press)", text: $newWorkoutName)
-            Button("Cancel", role: .cancel) { }
-            Button("Add") {
-                addWorkout()
-            }
-        }
+        .padding()
     }
     
     // MARK: - Computed Properties
@@ -117,27 +133,14 @@
     }
     
     // MARK: - Reorder Logic
-    func moveWorkout(from source: Workout, to destination: Workout) {
-        let sourceOrder = source.order
-        let destOrder = destination.order
+    func moveWorkouts(from source: IndexSet, to destination: Int) {
+        var workouts = sortedWorkouts
+        workouts.move(fromOffsets: source, toOffset: destination)
         
+        // Update order for all workouts
         withAnimation {
-            if sourceOrder < destOrder {
-                // Moving down: shift items between source and dest up
-                for workout in sortedWorkouts {
-                    if workout.order > sourceOrder && workout.order <= destOrder {
-                        workout.order -= 1
-                    }
-                }
-                source.order = destOrder
-            } else {
-                // Moving up: shift items between dest and source down
-                for workout in sortedWorkouts {
-                    if workout.order >= destOrder && workout.order < sourceOrder {
-                        workout.order += 1
-                    }
-                }
-                source.order = destOrder
+            for (index, workout) in workouts.enumerated() {
+                workout.order = Int32(index)
             }
             
             do {
@@ -146,6 +149,21 @@
             } catch {
                 let nsError = error as NSError
                 print("Error reordering workout: \(nsError), \(nsError.userInfo)")
+            }
+        }
+    }
+    
+    private func deleteWorkouts(at offsets: IndexSet) {
+        withAnimation {
+            for index in offsets {
+                viewContext.delete(sortedWorkouts[index])
+            }
+            
+            do {
+                try viewContext.save()
+            } catch {
+                let nsError = error as NSError
+                print("Error deleting workouts: \(nsError), \(nsError.userInfo)")
             }
         }
     }
@@ -242,6 +260,9 @@
 }
 
 // MARK: - Exercise Card View
+/// A card component displaying a single exercise/workout with its sets.
+/// Features a blue accent bar, drag handle indicator, and expandable add-set form.
+/// Used within WorkoutSessionView's list for each exercise.
 struct ExerciseCardView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @ObservedObject var workout: Workout
@@ -356,17 +377,12 @@ struct ExerciseCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
         .padding(.horizontal, 16)
-        .contextMenu {
-            Button(role: .destructive) {
-                onDeleteWorkout()
-            } label: {
-                Label("Delete Exercise", systemImage: "trash")
-            }
-        }
     }
 }
 
 // MARK: - Set Row View
+/// Displays a single set within an exercise card.
+/// Shows the set number, reps, and weight in a compact row format.
 struct SetRowView: View {
     let set: Set
     let index: Int
@@ -388,6 +404,9 @@ struct SetRowView: View {
 }
 
 // MARK: - Add Set Form View
+/// An inline form for adding a new set to an exercise.
+/// Contains text fields for reps and weight, plus Add/Cancel buttons.
+/// Displayed when the user taps "Add Set" on an exercise card.
 struct AddSetFormView: View {
     @Binding var newSetReps: String
     @Binding var newSetWeight: String
@@ -435,6 +454,9 @@ struct AddSetFormView: View {
 }
 
 // MARK: - Drag Preview
+/// A lightweight preview shown while dragging an exercise card.
+/// Displays the exercise name with a drag handle icon.
+/// Note: Currently unused as we switched to List-based reordering with EditButton.
 struct ExerciseCardDragPreview: View {
     let workoutName: String
     
