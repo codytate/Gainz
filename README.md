@@ -1,4 +1,4 @@
-# Gainz
+# Acend
 
 A comprehensive fitness and workout tracking application designed to help users monitor their progress, track exercises, and achieve their fitness goals.
 
